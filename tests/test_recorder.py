@@ -41,3 +41,22 @@ def test_recorder_start_stop(tmp_path):
         assert recorder.is_recording is True
         mic_path, sys_path = recorder.stop()
         assert recorder.is_recording is False
+
+def test_recorder_uses_barrier_for_sync(tmp_path):
+    """Проверяет что при двух устройствах создаётся Barrier(2)."""
+    with patch("src.audio.recorder.sd"), \
+         patch("src.audio.recorder.pyaudio"):
+        recorder = AudioRecorder()
+        recorder.start(output_dir=tmp_path, mic_device=0, loopback_device=25)
+        assert recorder._barrier is not None
+        assert recorder._barrier.parties == 2
+        recorder.stop()
+
+def test_recorder_no_barrier_single_device(tmp_path):
+    """При одном устройстве барьер не нужен."""
+    with patch("src.audio.recorder.sd"), \
+         patch("src.audio.recorder.pyaudio"):
+        recorder = AudioRecorder()
+        recorder.start(output_dir=tmp_path, mic_device=0, loopback_device=None)
+        assert recorder._barrier is None
+        recorder.stop()

@@ -105,6 +105,7 @@ class AudioRecorder:
         self._elapsed: float = 0
         self._level_callback: Callable | None = None
         self._sys_samplerate: int = 48000
+        self._barrier: threading.Barrier | None = None
         self.mic_error: str | None = None
         self.sys_error: str | None = None
 
@@ -145,6 +146,8 @@ class AudioRecorder:
                 channels=channels,
                 callback=callback,
             ):
+                if self._barrier:
+                    self._barrier.wait(timeout=5)
                 while self.is_recording:
                     sd.sleep(100)
         except Exception as e:
@@ -170,6 +173,9 @@ class AudioRecorder:
                 input_device_index=device,
                 frames_per_buffer=CHUNK,
             )
+
+            if self._barrier:
+                self._barrier.wait(timeout=5)
 
             while self.is_recording:
                 raw = stream.read(CHUNK, exception_on_overflow=False)
@@ -205,6 +211,9 @@ class AudioRecorder:
         self.sys_error = None
         self.is_recording = True
         self._start_time = time.time()
+
+        parties = sum(1 for d in (mic_device, loopback_device) if d is not None)
+        self._barrier = threading.Barrier(parties) if parties > 1 else None
 
         if mic_device is not None:
             self._mic_thread = threading.Thread(
