@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from pathlib import Path
 from typing import Callable
 
-import httpx
 import soundfile as sf
 
-logger = logging.getLogger(__name__)
+from ai.openrouter_client import send_chat_request
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+logger = logging.getLogger(__name__)
 
 TRANSCRIPTION_PROMPT = """Транскрибируй это аудио на русском языке.
 Определи разных спикеров и обозначь их как "Спикер 1:", "Спикер 2:" и т.д.
@@ -57,61 +57,56 @@ def _audio_to_base64(wav_path: Path) -> str:
     return base64.b64encode(wav_path.read_bytes()).decode("utf-8")
 
 
+async def _transcribe_chunk(
+    chunk_path: Path,
+    api_key: str,
+    model: str,
+    semaphore: asyncio.Semaphore,
+) -> str:
+    """Транскрибирует один чанк аудио."""
+    async with semaphore:
+        audio_b64 = _audio_to_base64(chunk_path)
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": TRANSCRIPTION_PROMPT},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": audio_b64,
+                            "format": "wav",
+                        },
+                    },
+                ],
+            }
+        ]
+        return await send_chat_request(messages, api_key, model, timeout=300)
+
+
 async def transcribe_audio(
     wav_path: Path,
     api_key: str,
     model: str = "google/gemini-3.1-flash-lite-preview",
     progress_callback: Callable | None = None,
 ) -> str:
-    """Транскрибирует аудиофайл через OpenRouter API с разбивкой на чанки."""
+    """Транскрибирует аудиофайл через OpenRouter API с параллельной обработкой чанков."""
     chunks = chunk_audio(wav_path)
-    transcripts: list[str] = []
 
-    async with httpx.AsyncClient(timeout=300) as client:
-        for i, chunk_path in enumerate(chunks):
-            audio_b64 = _audio_to_base64(chunk_path)
+    if len(chunks) == 1:
+        text = await _transcribe_chunk(chunks[0], api_key, model, asyncio.Semaphore(1))
+        if progress_callback:
+            progress_callback(1.0)
+        return text
 
-            payload = {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": TRANSCRIPTION_PROMPT},
-                            {
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "data": audio_b64,
-                                    "format": "wav",
-                                },
-                            },
-                        ],
-                    }
-                ],
-            }
+    semaphore = asyncio.Semaphore(3)
+    tasks = [
+        _transcribe_chunk(chunk_path, api_key, model, semaphore)
+        for chunk_path in chunks
+    ]
+    transcripts = await asyncio.gather(*tasks)
 
-            for attempt in range(3):
-                try:
-                    resp = await client.post(
-                        OPENROUTER_URL,
-                        json=payload,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    resp.raise_for_status()
-                    result = resp.json()
-                    text = result["choices"][0]["message"]["content"]
-                    transcripts.append(text)
-                    if progress_callback:
-                        progress_callback((i + 1) / len(chunks))
-                    break
-                except (httpx.HTTPStatusError, httpx.RequestError, KeyError) as e:
-                    logger.warning(
-                        "Попытка транскрибации %d не удалась: %s", attempt + 1, e
-                    )
-                    if attempt == 2:
-                        raise
+    if progress_callback:
+        progress_callback(1.0)
 
     return "\n\n".join(transcripts)

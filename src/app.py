@@ -89,6 +89,22 @@ class MeetScribeApp(ctk.CTk):
             ctk.CTkLabel(placeholder, text=f"Вид: {name}").pack()
             return placeholder
 
+    def show_meeting(self, meeting) -> None:
+        """Открывает встречу в виде транскрипта/саммари."""
+        from ui.transcript_view import TranscriptView
+
+        # Уничтожаем предыдущий TranscriptView, если есть
+        if "transcript" in self._views:
+            self._views["transcript"].destroy()
+
+        for view in self._views.values():
+            view.grid_forget()
+
+        view = TranscriptView(self._main_container, self, meeting)
+        self._views["transcript"] = view
+        view.grid(row=0, column=0, sticky="nsew")
+        self._current_view = "transcript"
+
     def set_status(self, text: str) -> None:
         """Обновляет текст строки статуса."""
         self._statusbar.configure(text=text)

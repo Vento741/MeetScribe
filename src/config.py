@@ -67,6 +67,12 @@ class AppConfig:
     def config_path(self) -> Path:
         return self.appdata_dir / "config.json"
 
+    @property
+    def temp_dir(self) -> Path:
+        import tempfile
+
+        return Path(tempfile.gettempdir()) / "MeetScribe"
+
 
 def load_config(path: Path | None = None) -> AppConfig:
     if path is None:

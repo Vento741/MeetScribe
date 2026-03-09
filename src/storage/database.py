@@ -88,15 +88,29 @@ class MeetingDB:
         ).fetchone()
         return self._row_to_meeting(row) if row else None
 
-    def list_meetings(self) -> list[Meeting]:
-        rows = self._conn.execute(
-            "SELECT * FROM meetings ORDER BY date DESC"
-        ).fetchall()
+    def list_meetings(self, lightweight: bool = False) -> list[Meeting]:
+        if lightweight:
+            rows = self._conn.execute(
+                "SELECT id, title, date, duration, audio_path, '' as transcript, "
+                "'' as summary, '' as prompt_used, created_at "
+                "FROM meetings ORDER BY date DESC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM meetings ORDER BY date DESC"
+            ).fetchall()
         return [self._row_to_meeting(r) for r in rows]
 
-    def search(self, query: str) -> list[Meeting]:
+    def search(self, query: str, lightweight: bool = False) -> list[Meeting]:
+        if lightweight:
+            cols = (
+                "m.id, m.title, m.date, m.duration, m.audio_path, "
+                "'' as transcript, '' as summary, '' as prompt_used, m.created_at"
+            )
+        else:
+            cols = "m.*"
         rows = self._conn.execute(
-            "SELECT m.* FROM meetings m "
+            f"SELECT {cols} FROM meetings m "
             "JOIN meetings_fts f ON m.id = f.rowid "
             "WHERE meetings_fts MATCH ? ORDER BY rank",
             (query,),

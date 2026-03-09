@@ -19,6 +19,7 @@ class RecordingView(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
         self._app = app
         self._recorder = AudioRecorder()
+        self._last_level_update: float = 0
 
         self.grid_columnconfigure(0, weight=1)
 
@@ -87,12 +88,8 @@ class RecordingView(ctk.CTkFrame):
 
         self._recorder.set_level_callback(self._on_audio_level)
 
-        import tempfile
-        from pathlib import Path
-
-        temp_dir = Path(tempfile.gettempdir()) / "MeetScribe"
         self._recorder.start(
-            output_dir=temp_dir,
+            output_dir=cfg.temp_dir,
             mic_device=cfg.mic_device,
             loopback_device=cfg.loopback_device,
         )
@@ -110,26 +107,20 @@ class RecordingView(ctk.CTkFrame):
         self._status_label.configure(text="Остановка записи...")
 
         def process():
+            from audio.mixer import mix_audio
+
             mic_path, sys_path = self._recorder.stop()
-            self.after(0, lambda: self._on_recording_stopped(mic_path, sys_path))
+            mixed_path = (
+                self._app.config.temp_dir
+                / f"mixed_{time.strftime('%Y%m%d_%H%M%S')}.wav"
+            )
+            try:
+                mix_audio(mic_path, sys_path, mixed_path)
+            except Exception:
+                mixed_path = mic_path or sys_path
+            self.after(0, lambda: self._process_audio(mixed_path))
 
         threading.Thread(target=process, daemon=True).start()
-
-    def _on_recording_stopped(self, mic_path, sys_path) -> None:
-        """Обрабатывает остановку записи: микширование и запуск пайплайна."""
-        from audio.mixer import mix_audio
-        from pathlib import Path
-        import tempfile
-
-        temp_dir = Path(tempfile.gettempdir()) / "MeetScribe"
-        mixed_path = temp_dir / f"mixed_{time.strftime('%Y%m%d_%H%M%S')}.wav"
-
-        try:
-            mix_audio(mic_path, sys_path, mixed_path)
-        except Exception:
-            mixed_path = mic_path or sys_path
-
-        self._process_audio(mixed_path)
 
     def _process_audio(self, audio_path) -> None:
         """Запускает пайплайн транскрибации и генерации саммари."""
@@ -210,7 +201,11 @@ class RecordingView(ctk.CTkFrame):
         self._app.set_status(f"Ошибка: {error}")
 
     def _on_audio_level(self, source: str, level: float) -> None:
-        """Колбэк обновления индикатора уровня звука."""
+        """Колбэк обновления индикатора уровня звука (ограничен 20 Гц)."""
+        now = time.monotonic()
+        if now - self._last_level_update < 0.05:
+            return
+        self._last_level_update = now
         clamped = min(level * 10, 1.0)
         if source == "mic":
             self.after(0, lambda: self._mic_bar.set(clamped))

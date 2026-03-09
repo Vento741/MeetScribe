@@ -13,7 +13,7 @@ async def test_generate_summary():
         "choices": [{"message": {"content": "# Протокол\n## Решения\n1. Запуск MVP в апреле"}}]
     }
 
-    with patch("src.ai.summarizer.httpx.AsyncClient") as MockClient:
+    with patch("src.ai.openrouter_client.httpx.AsyncClient") as MockClient:
         client = AsyncMock()
         client.post.return_value = mock_response
         MockClient.return_value.__aenter__ = AsyncMock(return_value=client)

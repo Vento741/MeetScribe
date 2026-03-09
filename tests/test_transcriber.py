@@ -42,7 +42,7 @@ async def test_transcribe_audio_calls_api(tmp_path):
         "choices": [{"message": {"content": "Спикер 1: Привет\nСпикер 2: Здравствуйте"}}]
     }
 
-    with patch("src.ai.transcriber.httpx.AsyncClient") as MockClient:
+    with patch("src.ai.openrouter_client.httpx.AsyncClient") as MockClient:
         client = AsyncMock()
         client.post.return_value = mock_response
         MockClient.return_value.__aenter__ = AsyncMock(return_value=client)

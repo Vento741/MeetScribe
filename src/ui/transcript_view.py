@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 
 from storage.database import Meeting
-from storage.exporter import export_to_markdown
+from storage.exporter import export_to_markdown, format_duration
 
 if TYPE_CHECKING:
     from app import MeetScribeApp
@@ -37,7 +37,7 @@ class TranscriptView(ctk.CTkFrame):
         self._title_entry.bind("<Return>", self._save_title)
 
         # Информационная строка
-        duration = f"{meeting.duration // 3600:02d}:{(meeting.duration % 3600) // 60:02d}:{meeting.duration % 60:02d}"
+        duration = format_duration(meeting.duration)
         info = ctk.CTkLabel(
             self, text=f"{meeting.date[:10]}  |  {duration}", text_color="gray"
         )

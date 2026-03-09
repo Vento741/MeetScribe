@@ -28,18 +28,10 @@ def list_audio_devices() -> list[AudioDevice]:
     """Возвращает список доступных аудиоустройств ввода."""
     devices = []
     all_devs = sd.query_devices()
-    hostapis = sd.query_hostapis()
 
     for i, dev in enumerate(all_devs):
         if dev["max_input_channels"] > 0:
-            api_name = (
-                hostapis[dev["hostapi"]]["name"]
-                if dev["hostapi"] < len(hostapis)
-                else ""
-            )
-            is_loopback = (
-                "loopback" in dev["name"].lower() or "wasapi" in api_name.lower()
-            )
+            is_loopback = "loopback" in dev["name"].lower()
             devices.append(
                 AudioDevice(
                     index=i,
@@ -63,14 +55,15 @@ class AudioRecorder:
         self._mic_path: Path | None = None
         self._sys_path: Path | None = None
         self._start_time: float = 0
+        self._elapsed: float = 0
         self._level_callback: Callable | None = None
 
     @property
     def elapsed_seconds(self) -> float:
         """Возвращает прошедшее время записи в секундах."""
-        if not self.is_recording:
-            return 0
-        return time.time() - self._start_time
+        if self.is_recording:
+            return time.time() - self._start_time
+        return self._elapsed
 
     def set_level_callback(self, callback: Callable) -> None:
         """Устанавливает колбэк для уровня громкости."""
@@ -148,6 +141,7 @@ class AudioRecorder:
 
     def stop(self) -> tuple[Path | None, Path | None]:
         """Останавливает запись и сохраняет WAV-файлы."""
+        self._elapsed = time.time() - self._start_time
         self.is_recording = False
 
         if self._mic_thread:

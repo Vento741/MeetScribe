@@ -4,7 +4,7 @@ import logging
 import re
 from pathlib import Path
 
-from src.storage.database import Meeting
+from storage.database import Meeting
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ def _sanitize_filename(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", name).strip()[:50]
 
 
-def _format_duration(seconds: int) -> str:
+def format_duration(seconds: int) -> str:
     """Форматирует длительность в ЧЧ:ММ:СС."""
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
@@ -34,7 +34,7 @@ def export_to_markdown(meeting: Meeting, output_dir: Path) -> Path:
         content = (
             f"# {meeting.title}\n\n"
             f"**Дата:** {meeting.date}\n"
-            f"**Длительность:** {_format_duration(meeting.duration)}\n\n"
+            f"**Длительность:** {format_duration(meeting.duration)}\n\n"
             f"## Транскрипт\n\n{meeting.transcript}"
         )
 

@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
+from storage.exporter import format_duration
+
 if TYPE_CHECKING:
     from app import MeetScribeApp
 
@@ -47,9 +49,9 @@ class HistoryView(ctk.CTkFrame):
 
         query = self._search_entry.get().strip()
         if query:
-            meetings = self._app.db.search(query)
+            meetings = self._app.db.search(query, lightweight=True)
         else:
-            meetings = self._app.db.list_meetings()
+            meetings = self._app.db.list_meetings(lightweight=True)
 
         if not meetings:
             ctk.CTkLabel(self._scroll, text="Нет встреч", text_color="gray").grid(
@@ -58,7 +60,7 @@ class HistoryView(ctk.CTkFrame):
             return
 
         for i, m in enumerate(meetings):
-            duration = f"{m.duration // 3600:02d}:{(m.duration % 3600) // 60:02d}:{m.duration % 60:02d}"
+            duration = format_duration(m.duration)
             card = ctk.CTkFrame(self._scroll, corner_radius=8)
             card.grid(row=i, column=0, sticky="ew", pady=3)
             card.grid_columnconfigure(1, weight=1)
@@ -85,8 +87,4 @@ class HistoryView(ctk.CTkFrame):
 
     def _open_meeting(self, meeting) -> None:
         """Открывает встречу в виде транскрипта/саммари."""
-        from ui.transcript_view import TranscriptView
-
-        view = TranscriptView(self._app._main_container, self._app, meeting)
-        self._app._views["transcript"] = view
-        self._app.show_view("transcript")
+        self._app.show_meeting(meeting)
