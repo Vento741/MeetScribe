@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import threading
+import tkinter as tk
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
 from storage.database import Meeting
-from storage.exporter import export_to_markdown, format_duration
+from storage.exporter import (
+    export_to_html,
+    export_to_markdown,
+    export_to_pdf,
+    export_to_txt,
+    format_duration,
+)
 
 if TYPE_CHECKING:
     from app import MeetScribeApp
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptView(ctk.CTkFrame):
@@ -67,9 +79,22 @@ class TranscriptView(ctk.CTkFrame):
         ctk.CTkButton(
             btn_frame, text="Копировать саммари", command=self._copy_summary
         ).pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="Экспорт .md", command=self._export_md).pack(
-            side="left", padx=5
+
+        self._regen_btn = ctk.CTkButton(
+            btn_frame, text="Перегенерировать", command=self._regenerate_summary
         )
+        self._regen_btn.pack(side="left", padx=5)
+
+        self._regen_prompt_btn = ctk.CTkButton(
+            btn_frame, text="С другим промптом...", command=self._regenerate_with_prompt
+        )
+        self._regen_prompt_btn.pack(side="left", padx=5)
+
+        self._export_btn = ctk.CTkButton(
+            btn_frame, text="Экспорт...", command=self._show_export_menu
+        )
+        self._export_btn.pack(side="left", padx=5)
+
         ctk.CTkButton(
             btn_frame,
             text="Назад",
@@ -91,10 +116,119 @@ class TranscriptView(ctk.CTkFrame):
         self.clipboard_append(text)
         self._app.set_status("Саммари скопировано в буфер обмена")
 
-    def _export_md(self) -> None:
-        """Экспортирует встречу в Markdown-файл."""
+    # ═══════════════════════ Перегенерация ═══════════════════════
+
+    def _regenerate_summary(self) -> None:
+        """Перегенерирует саммари с текущим промптом из настроек."""
+        if not self._meeting.transcript:
+            self._app.set_status("Нет транскрипта для генерации саммари")
+            return
+        self._run_regeneration(self._app.config.prompt_template)
+
+    def _regenerate_with_prompt(self) -> None:
+        """Открывает модальное окно для редактирования промпта перед перегенерацией."""
+        if not self._meeting.transcript:
+            self._app.set_status("Нет транскрипта для генерации саммари")
+            return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Промпт для саммари")
+        dialog.geometry("600x400")
+        dialog.grab_set()
+
+        ctk.CTkLabel(
+            dialog, text="Отредактируйте промпт:",
+        ).pack(pady=(10, 5), padx=10, anchor="w")
+
+        prompt_box = ctk.CTkTextbox(dialog, height=250)
+        prompt_box.pack(fill="both", expand=True, padx=10, pady=5)
+        prompt_box.insert(
+            "1.0",
+            self._meeting.prompt_used or self._app.config.prompt_template,
+        )
+
+        def on_generate():
+            prompt = prompt_box.get("1.0", "end").strip()
+            dialog.destroy()
+            self._run_regeneration(prompt)
+
+        ctk.CTkButton(dialog, text="Генерировать", command=on_generate).pack(pady=10)
+
+    def _run_regeneration(self, prompt: str) -> None:
+        """Запускает перегенерацию саммари в фоновом потоке."""
+        from ai.summarizer import generate_summary
+
+        self._app.set_status("Генерация саммари...")
+        self._regen_btn.configure(state="disabled", text="Генерация...")
+        self._regen_prompt_btn.configure(state="disabled")
+
+        cfg = self._app.config
+
+        def run():
+            loop = asyncio.new_event_loop()
+            try:
+                summary = loop.run_until_complete(
+                    generate_summary(
+                        self._meeting.transcript, prompt, cfg.api_key, cfg.model,
+                    )
+                )
+                self.after(0, lambda: self._on_regen_done(summary, prompt))
+            except Exception:
+                import traceback
+
+                err = traceback.format_exc()
+                logger.error("Ошибка перегенерации: %s", err)
+                self.after(0, lambda: self._on_regen_error(err))
+            finally:
+                loop.close()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_regen_done(self, summary: str, prompt: str) -> None:
+        """Обработка результата перегенерации."""
+        self._app.db.update_summary(self._meeting.id, summary, prompt)
+        self._meeting.summary = summary
+        self._meeting.prompt_used = prompt
+        self._summary_text.delete("1.0", "end")
+        self._summary_text.insert("1.0", summary or "(нет саммари)")
+        self._regen_btn.configure(state="normal", text="Перегенерировать")
+        self._regen_prompt_btn.configure(state="normal")
+        self._app.set_status("Саммари обновлено")
+
+    def _on_regen_error(self, err: str) -> None:
+        """Обработка ошибки перегенерации."""
+        self._regen_btn.configure(state="normal", text="Перегенерировать")
+        self._regen_prompt_btn.configure(state="normal")
+        self._app.set_status(f"Ошибка: {err[:200]}")
+
+    # ═══════════════════════ Экспорт ═══════════════════════
+
+    def _show_export_menu(self) -> None:
+        """Показывает выпадающее меню выбора формата экспорта."""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="PDF (.pdf)", command=lambda: self._export("pdf"))
+        menu.add_command(label="Markdown (.md)", command=lambda: self._export("md"))
+        menu.add_command(label="HTML (.html)", command=lambda: self._export("html"))
+        menu.add_command(label="Текст (.txt)", command=lambda: self._export("txt"))
+        btn = self._export_btn
+        x = btn.winfo_rootx()
+        y = btn.winfo_rooty() + btn.winfo_height()
+        menu.tk_popup(x, y)
+
+    def _export(self, fmt: str) -> None:
+        """Экспортирует встречу в выбранном формате."""
         from pathlib import Path
 
         save_dir = Path(self._app.config.save_dir)
-        path = export_to_markdown(self._meeting, save_dir)
-        self._app.set_status(f"Экспортировано: {path}")
+        exporters = {
+            "md": export_to_markdown,
+            "txt": export_to_txt,
+            "html": export_to_html,
+            "pdf": export_to_pdf,
+        }
+        try:
+            path = exporters[fmt](self._meeting, save_dir)
+            self._app.set_status(f"Экспортировано: {path}")
+        except Exception as e:
+            logger.error("Ошибка экспорта %s: %s", fmt, e)
+            self._app.set_status(f"Ошибка экспорта: {e}")
