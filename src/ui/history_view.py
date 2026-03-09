@@ -306,61 +306,54 @@ class HistoryView(ctk.CTkFrame):
             self._create_meeting_card(m, i)
 
     def _create_meeting_card(self, meeting, row: int) -> None:
-        """Создаёт карточку встречи с drag & drop и контекстным меню."""
+        """Создаёт компактную карточку встречи с drag & drop и контекстным меню."""
         duration = format_duration(meeting.duration)
 
         card = ctk.CTkFrame(
-            self._scroll, corner_radius=10,
+            self._scroll, corner_radius=6, height=36,
             fg_color=_CARD_BG,
             border_width=1, border_color=("gray82", "gray22"),
         )
-        card.grid(row=row, column=0, sticky="ew", pady=3, padx=4)
+        card.grid(row=row, column=0, sticky="ew", pady=2, padx=4)
         card.grid_columnconfigure(2, weight=1)
+        card.grid_propagate(False)
 
-        # Цветной акцент слева
+        # Акцент-полоска слева
         accent_bar = ctk.CTkFrame(
-            card, width=4, corner_radius=2,
-            fg_color=_ACCENT,
+            card, width=3, corner_radius=1, fg_color=_ACCENT,
         )
-        accent_bar.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(6, 8), pady=8)
+        accent_bar.grid(row=0, column=0, sticky="ns", padx=(4, 6), pady=4)
 
         # Дата
         date_label = ctk.CTkLabel(
             card, text=meeting.date[:10],
             text_color=_DATE_COLOR,
-            font=ctk.CTkFont(size=11),
-            width=80,
+            font=ctk.CTkFont(size=11), width=72,
         )
-        date_label.grid(row=0, column=1, padx=(0, 8), pady=(10, 0), sticky="nw")
+        date_label.grid(row=0, column=1, padx=(0, 6), sticky="w")
 
-        # Название
-        title_label = ctk.CTkLabel(
-            card,
-            text=meeting.title or "Без названия",
-            anchor="w",
-            font=ctk.CTkFont(size=14, weight="bold"),
-        )
-        title_label.grid(row=0, column=2, sticky="ew", pady=(8, 0))
-
-        # Длительность
-        dur_label = ctk.CTkLabel(
-            card, text=duration, text_color=_DUR_COLOR,
-            font=ctk.CTkFont(size=11),
-        )
-        dur_label.grid(row=0, column=3, padx=(8, 12), pady=(10, 0), sticky="ne")
-
-        # Подпись папки (если есть)
+        # Название + папка в одну строку
+        title_text = meeting.title or "Без названия"
         if meeting.folder_id is not None:
             folders = self._app.db.list_folders()
             folder_name = next(
                 (f["name"] for f in folders if f["id"] == meeting.folder_id), None,
             )
             if folder_name:
-                ctk.CTkLabel(
-                    card, text=f"📁 {folder_name}",
-                    text_color=("gray55", "gray50"),
-                    font=ctk.CTkFont(size=10),
-                ).grid(row=1, column=2, sticky="w", pady=(0, 6))
+                title_text = f"{title_text}  ·  📁 {folder_name}"
+
+        title_label = ctk.CTkLabel(
+            card, text=title_text, anchor="w",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        title_label.grid(row=0, column=2, sticky="ew")
+
+        # Длительность
+        dur_label = ctk.CTkLabel(
+            card, text=duration, text_color=_DUR_COLOR,
+            font=ctk.CTkFont(size=11),
+        )
+        dur_label.grid(row=0, column=3, padx=(6, 10), sticky="e")
 
         # Все виджеты для биндинга
         widgets = [card, date_label, title_label, dur_label, accent_bar]
