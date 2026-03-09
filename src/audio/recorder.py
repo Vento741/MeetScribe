@@ -173,9 +173,9 @@ class AudioRecorder:
     def _record_loopback(self, device: int, data_list: list) -> None:
         """Записывает системный звук через pyaudiowpatch WASAPI loopback.
 
-        Использует callback-режим, чтобы непрерывно получать данные
-        (включая тишину, когда нет системного звука). Это гарантирует
-        временную синхронизацию с микрофонной дорожкой.
+        WASAPI loopback НЕ генерирует сэмплы, когда нет системного звука.
+        Поэтому отслеживаем время между колбэками и вставляем тишину
+        для пропущенных промежутков, чтобы сохранить временную синхронизацию.
         """
         p = pyaudio.PyAudio()
         try:
@@ -187,13 +187,41 @@ class AudioRecorder:
             CHUNK = 1024
             recording_active = threading.Event()
             first_sample_recorded = threading.Event()
+            # Счётчик ожидаемых сэмплов для отслеживания gap'ов
+            last_callback_time = [0.0]
+            # Порог gap'а: если между колбэками > этого, вставляем тишину
+            # Нормальный интервал колбэка ~ CHUNK/samplerate ≈ 21мс для 48kHz
+            gap_threshold = CHUNK / samplerate * 3  # ~63мс — 3x нормального интервала
 
             def callback(in_data, frame_count, time_info, status):
                 if not recording_active.is_set():
                     return (None, pyaudio.paContinue)
+
+                now = time.time()
+
                 if not first_sample_recorded.is_set():
-                    self._sys_first_sample_time = time.time()
+                    self._sys_first_sample_time = now
                     first_sample_recorded.set()
+                    last_callback_time[0] = now
+                else:
+                    # Проверяем, был ли gap (тишина в системном звуке)
+                    elapsed = now - last_callback_time[0]
+                    if elapsed > gap_threshold:
+                        # Вычитаем нормальный интервал одного чанка
+                        gap_duration = elapsed - (CHUNK / samplerate)
+                        silence_samples = int(gap_duration * samplerate)
+                        if silence_samples > 0:
+                            silence = np.zeros(
+                                (silence_samples, channels), dtype=np.float32
+                            )
+                            data_list.append(silence)
+                            logger.debug(
+                                "Loopback gap: вставлена тишина %.2f сек",
+                                gap_duration,
+                            )
+
+                last_callback_time[0] = now
+
                 audio = np.frombuffer(in_data, dtype=np.float32).reshape(-1, channels)
                 data_list.append(audio)
                 if self._level_callback:
