@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Vento741/MeetScribe-by-Web_Dusha/main/src/assets/icon.ico" width="120" alt="MeetScribe icon"/>
+  <img src="https://raw.githubusercontent.com/Vento741/MeetScribe/main/src/assets/icon.ico" width="120" alt="MeetScribe icon"/>
 </p>
 
 <h1 align="center">MeetScribe</h1>
@@ -78,8 +78,8 @@
 
 ```bash
 # 1. Клонируем репозиторий
-git clone https://github.com/Vento741/MeetScribe-by-Web_Dusha.git
-cd MeetScribe-by-Web_Dusha
+git clone https://github.com/Vento741/MeetScribe.git
+cd MeetScribe
 
 # 2. Создаём виртуальное окружение
 python -m venv venv
@@ -94,7 +94,7 @@ python src/main.py
 
 ### Готовый .exe
 
-Скачайте `MeetScribe.exe` из [Releases](https://github.com/Vento741/MeetScribe-by-Web_Dusha/releases) — запускается без установки Python.
+Скачайте `MeetScribe.exe` из [Releases](https://github.com/Vento741/MeetScribe/releases) — запускается без установки Python.
 
 ---
 
