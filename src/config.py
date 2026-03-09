@@ -78,7 +78,7 @@ def load_config(path: Path | None = None) -> AppConfig:
                 if hasattr(cfg, key):
                     setattr(cfg, key, value)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to load config from %s: %s", path, e)
+            logger.warning("Не удалось загрузить конфиг из %s: %s", path, e)
 
     env_key = os.environ.get("OPENROUTER_API_KEY")
     if env_key:
