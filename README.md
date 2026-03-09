@@ -92,9 +92,9 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
-### Готовый .exe
+### Сборка .exe
 
-Скачайте `MeetScribe.exe` из [Releases](https://github.com/Vento741/MeetScribe/releases) — запускается без установки Python.
+См. раздел [Сборка .exe](#сборка-exe) ниже.
 
 ---
 
