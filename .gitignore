@@ -16,3 +16,4 @@ config.json
 # Internal docs — not for public repo
 CLAUDE.md
 docs/
+.worktrees/
