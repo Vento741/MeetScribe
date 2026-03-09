@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import customtkinter as ctk
 
 from config import load_config
 from storage.database import MeetingDB
 from ui.sidebar import Sidebar
+
+_ICON_PATH = Path(__file__).parent / "assets" / "icon.ico"
 
 
 class MeetScribeApp(ctk.CTk):
@@ -22,6 +27,16 @@ class MeetScribeApp(ctk.CTk):
         self.title("MeetScribe")
         self.geometry("1100x700")
         self.minsize(900, 600)
+
+        # Иконка окна и панели задач
+        if _ICON_PATH.exists():
+            self.iconbitmap(str(_ICON_PATH))
+            if sys.platform == "win32":
+                import ctypes
+                # Устанавливаем AppUserModelID для корректной иконки в панели задач
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    "webdusha.meetscribe.app.1"
+                )
 
         # Разметка
         self.grid_columnconfigure(1, weight=1)

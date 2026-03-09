@@ -51,7 +51,7 @@ class Sidebar(ctk.CTkFrame):
 
         # Версия
         ctk.CTkLabel(
-            self, text="v1.0.0",
+            self, text="v1.0.1",
             text_color=("gray60", "gray45"),
             font=ctk.CTkFont(size=10),
         ).pack(pady=(0, 12))
